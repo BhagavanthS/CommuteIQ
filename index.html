@@ -467,9 +467,8 @@
 
     <div id="map"></div>
 
-    <!-- Data Boundary Restriction Warning Toast -->
     <div id="restriction-toast">
-        <span>⚠️ Region Restricted: CommuteIQ sensor telemetry is available only within Coimbatore rural sectors.</span>
+        <span>⚠️ Region Restricted: CommuteIQ telemetry is available only within Coimbatore rural sectors.</span>
     </div>
 
     <div id="search-card">
@@ -531,7 +530,7 @@
         <div class="chat-header">
             <span>🤖 Route Copilot</span>
             <div style="display:flex;align-items:center;gap:6px;">
-                <span style="font-size:0.65rem;background:rgba(255,255,255,0.25);padding:2px 6px;border-radius:4px;" id="ai-mode-tag">Checking...</span>
+                <span style="font-size:0.65rem;background:rgba(0, 230, 118, 0.35);padding:2px 6px;border-radius:4px;" id="ai-mode-tag">Telemetry Agent</span>
                 <button class="panel-close-btn" style="color:white;" onclick="toggleChatPopup()">✕</button>
             </div>
         </div>
@@ -547,11 +546,10 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <script>
-        // Authorized Coimbatore Regional Geographic Boundary
         const ALLOWED_BOUNDS = { min_lat: 10.6500, max_lat: 11.2500, min_lon: 76.7500, max_lon: 77.3800 };
-
         function isPointInAllowedRegion(lat, lon) {
             return (lat >= ALLOWED_BOUNDS.min_lat && lat <= ALLOWED_BOUNDS.max_lat &&
                     lon >= ALLOWED_BOUNDS.min_lon && lon <= ALLOWED_BOUNDS.max_lon);
@@ -567,30 +565,15 @@
         const bounds = L.latLngBounds(L.latLng(ALLOWED_BOUNDS.min_lat, ALLOWED_BOUNDS.min_lon), L.latLng(ALLOWED_BOUNDS.max_lat, ALLOWED_BOUNDS.max_lon));
         
         const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-            maxZoom: 20, 
-            attribution: '&copy; Google Maps'
+            maxZoom: 20, attribution: '&copy; Google Maps'
         });
-
-        const esriSatellite = L.tileLayer(
-            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            { attribution: 'Tiles &copy; Esri', maxNativeZoom: 17, maxZoom: 19 }
-        );
-        const esriLabels = L.tileLayer(
-            'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-            { attribution: 'Labels &copy; Esri', maxNativeZoom: 17, maxZoom: 19 }
-        );
+        const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 17, maxZoom: 19 });
+        const esriLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 17, maxZoom: 19 });
         const satelliteHybrid = L.layerGroup([esriSatellite, esriLabels]);
-
-        const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; CARTO', maxZoom: 19
-        });
+        const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19 });
 
         const map = L.map('map', { 
-            maxBounds: bounds, 
-            maxBoundsViscosity: 0.85, 
-            minZoom: 9, 
-            maxZoom: 20,
-            layers: [googleHybrid]
+            maxBounds: bounds, maxBoundsViscosity: 0.85, minZoom: 9, maxZoom: 20, layers: [googleHybrid]
         }).setView([10.8260, 77.1400], 12);
 
         L.control.layers({
@@ -599,19 +582,74 @@
             "🗺️ Clean Vector Streets": streetLayer
         }, null, { position: 'topright' }).addTo(map);
 
+        let datasetRecords = [];
+        let presetLandmarks = [
+            {name: "Bhagavanth Sakthivel Home, Malaimanthiripalayam", category: "Home & Residence", lat: 10.825917, lon: 77.221222},
+            {name: "Malaimanthiripalayam Village Center", category: "Village", lat: 10.827100, lon: 77.220400},
+            {name: "Senjerimalai Sri Mandhrakiri Murugan Temple (Hilltop Premises)", category: "Temple", lat: 10.82985, lon: 77.19420},
+            {name: "Senjeri Medu Bus Terminus & Market", category: "Transit", class: "Transit", lat: 10.83780, lon: 77.17790},
+            {name: "Sri Eshwar College of Engineering (SECE Main Gate)", category: "College", lat: 10.82736, lon: 77.06052},
+            {name: "Kinathukadavu New Bus Stand", category: "Transit", lat: 10.82110, lon: 77.01825},
+            {name: "Othakalmandapam Toll Plaza (NH 83)", category: "Toll", lat: 10.89190, "lon": 76.98520},
+            {name: "Ukkadam Central Bus Stand & Lakefront", category: "Transit", lat: 10.98590, lon: 76.96280}
+        ];
+
         let startPoint = [10.82736, 77.06052]; 
         let endPoint = [10.825917, 77.221222]; 
-        let startMarker = null;
-        let endMarker = null;
-        let allRoutesData = [];
-        let activeRouteId = 0;
+        let startMarker = null, endMarker = null;
+        let allRoutesData = [], activeRouteId = 0;
         let routePolylinesGroup = L.layerGroup().addTo(map);
         let waypointMarkersGroup = L.layerGroup().addTo(map);
         let durationMarkersGroup = L.layerGroup().addTo(map);
-        let presetLandmarks = [];
         let searchDebounceTimers = {};
-
         const trafficColors = { "Low": "#00E676", "Medium": "#FFB300", "High": "#FF1744" };
+
+        // Load Dataset CSV on client side
+        async function loadDataset() {
+            try {
+                const response = await fetch('smart_mobility_dataset.csv');
+                const csvText = await response.text();
+                Papa.parse(csvText, {
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        datasetRecords = results.data.filter(row => row.Latitude && row.Longitude);
+                        console.log(`Loaded ${datasetRecords.length} telemetry points from CSV.`);
+                        calculateRoutes();
+                    }
+                });
+            } catch (err) {
+                console.warn("CSV load fallback active:", err);
+                calculateRoutes();
+            }
+        }
+
+        function getTelemetryForPoint(lat, lon) {
+            if (!datasetRecords.length) return { traffic: "Low", speed: 45.0, weather: "Clear" };
+            // Find closest telemetry record
+            let closest = datasetRecords[0];
+            let minDist = Infinity;
+            for (let i = 0; i < Math.min(datasetRecords.length, 500); i++) {
+                const r = datasetRecords[Math.floor(Math.random() * datasetRecords.length)];
+                const d = Math.hypot(r.Latitude - lat, r.Longitude - lon);
+                if (d < minDist) { minDist = d; closest = r; }
+            }
+            return {
+                traffic: closest.Traffic_Condition || "Low",
+                speed: closest.Traffic_Speed_kmh || 45.0,
+                weather: closest.Weather_Condition || "Clear"
+            };
+        }
+
+        function getClosestLandmarkName(lat, lon) {
+            let closest = presetLandmarks[0];
+            let minDist = Infinity;
+            presetLandmarks.forEach(lm => {
+                const d = Math.hypot(lm.lat - lat, lm.lon - lon);
+                if (d < minDist) { minDist = d; closest = lm; }
+            });
+            return closest.name;
+        }
 
         function formatMarkdownToHTML(text) {
             if (!text) return '';
@@ -619,32 +657,7 @@
             clean = clean.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
             clean = clean.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             clean = clean.replace(/(^|[^\*])\*([^\*]+)\*/g, '$1<em>$2</em>');
-
-            const lines = clean.split('\n');
-            let inList = false;
-            let result = [];
-
-            lines.forEach(line => {
-                const trimmed = line.trim();
-                if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
-                    if (!inList) {
-                        result.push('<ul>');
-                        inList = true;
-                    }
-                    result.push(`<li>${trimmed.substring(2)}</li>`);
-                } else {
-                    if (inList) {
-                        result.push('</ul>');
-                        inList = false;
-                    }
-                    if (trimmed.length > 0) {
-                        result.push(`<div>${trimmed}</div>`);
-                    }
-                }
-            });
-
-            if (inList) result.push('</ul>');
-            return result.join('');
+            return clean.replace(/\n/g, '<br>');
         }
 
         function createPinIcon(fillColor, label) {
@@ -659,8 +672,7 @@
                         <span style="position: absolute; top: 5px; left: 0; width: 24px; text-align: center; font-size: 10px; font-weight: 800; color: ${fillColor};">${label}</span>
                     </div>
                 `,
-                iconSize: [26, 38],
-                iconAnchor: [13, 37]
+                iconSize: [26, 38], iconAnchor: [13, 37]
             });
         }
 
@@ -671,7 +683,7 @@
             startMarker.on('dragend', (e) => { 
                 const pt = [e.target.getLatLng().lat, e.target.getLatLng().lng];
                 if (!isPointInAllowedRegion(pt[0], pt[1])) {
-                    showRestrictionToast("⚠️ Location outside authorized zone. Snapped to nearest Coimbatore corridor.");
+                    showRestrictionToast("⚠️ Location outside authorized zone. Snapped to Coimbatore corridor.");
                     startMarker.setLatLng(startPoint);
                     return;
                 }
@@ -683,7 +695,7 @@
             endMarker.on('dragend', (e) => { 
                 const pt = [e.target.getLatLng().lat, e.target.getLatLng().lng];
                 if (!isPointInAllowedRegion(pt[0], pt[1])) {
-                    showRestrictionToast("⚠️ Location outside authorized zone. Snapped to nearest Coimbatore corridor.");
+                    showRestrictionToast("⚠️ Location outside authorized zone. Snapped to Coimbatore corridor.");
                     endMarker.setLatLng(endPoint);
                     return;
                 }
@@ -693,51 +705,18 @@
             });
         }
 
-        async function updateAIStatusBadge() {
-            try {
-                const res = await fetch('/api/status');
-                const data = await res.json();
-                const badge = document.getElementById('ai-mode-tag');
-                if (data.online) {
-                    badge.innerText = "Gemini 3.6 Flash";
-                    badge.style.background = "rgba(0, 230, 118, 0.35)";
-                } else {
-                    badge.innerText = "Offline Telemetry";
-                    badge.style.background = "rgba(255, 179, 0, 0.35)";
-                }
-            } catch (e) {
-                const badge = document.getElementById('ai-mode-tag');
-                badge.innerText = "Offline Telemetry";
-                badge.style.background = "rgba(255, 179, 0, 0.35)";
-            }
-        }
-
         async function setupSearchSystem() {
-            try {
-                const res = await fetch('/api/places');
-                presetLandmarks = await res.json();
-
-                renderDropdownList('start', presetLandmarks);
-                renderDropdownList('dest', presetLandmarks);
-
-                document.getElementById('start-search-input').value = "Sri Eshwar College of Engineering (SECE Main Gate)";
-                document.getElementById('dest-search-input').value = "Bhagavanth Sakthivel Home, Malaimanthiripalayam";
-
-                setupLiveInputListener('start');
-                setupLiveInputListener('dest');
-            } catch (err) {
-                console.error("Error loading places:", err);
-            }
+            renderDropdownList('start', presetLandmarks);
+            renderDropdownList('dest', presetLandmarks);
+            document.getElementById('start-search-input').value = "Sri Eshwar College of Engineering (SECE Main Gate)";
+            document.getElementById('dest-search-input').value = "Bhagavanth Sakthivel Home, Malaimanthiripalayam";
+            setupLiveInputListener('start');
+            setupLiveInputListener('dest');
         }
 
         function renderDropdownList(type, list) {
             const container = document.getElementById(`${type}-dropdown-menu`);
             container.innerHTML = '';
-            if (!list.length) {
-                container.innerHTML = '<div style="padding:8px 10px;color:#70757a;font-size:0.75rem;">No authorized place found</div>';
-                return;
-            }
-
             list.forEach(item => {
                 const row = document.createElement('div');
                 if (item.restricted) {
@@ -746,10 +725,7 @@
                     row.onclick = () => showRestrictionToast("Data restricted: CommuteIQ operates strictly inside Coimbatore corridors.");
                 } else {
                     row.className = 'combo-option';
-                    row.innerHTML = `
-                        <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">${item.name}</span>
-                        <span class="tag">${item.category || 'Place'}</span>
-                    `;
+                    row.innerHTML = `<span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">${item.name}</span><span class="tag">${item.category || 'Place'}</span>`;
                     row.onclick = () => selectPlace(type, item);
                 }
                 container.appendChild(row);
@@ -760,28 +736,37 @@
             const input = document.getElementById(`${type}-search-input`);
             const menu = document.getElementById(`${type}-dropdown-menu`);
 
-            input.addEventListener('input', () => {
-                const term = input.value.trim();
+            input.addEventListener('input', async () => {
+                const term = input.value.trim().toLowerCase();
                 clearTimeout(searchDebounceTimers[type]);
-
                 if (term.length < 2) {
                     renderDropdownList(type, presetLandmarks);
                     menu.style.display = 'block';
                     return;
                 }
-
                 searchDebounceTimers[type] = setTimeout(async () => {
                     try {
-                        const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
-                        const results = await res.json();
+                        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(term + ", Coimbatore")}&format=json&limit=6`, {
+                            headers: { 'User-Agent': 'CommuteIQ-Static/1.0' }
+                        });
+                        const items = await res.json();
+                        let results = items.map(i => ({
+                            name: i.display_name.split(',').slice(0,3).join(','),
+                            category: i.type || 'Place',
+                            lat: parseFloat(i.lat),
+                            lon: parseFloat(i.lon)
+                        })).filter(i => isPointInAllowedRegion(i.lat, i.lon));
+
+                        if (!results.length) {
+                            results = [{ name: `'${term}' is outside permitted coverage`, category: "Restricted", restricted: true }];
+                        }
                         renderDropdownList(type, results);
                         menu.style.display = 'block';
                     } catch (e) {
                         console.error(e);
                     }
-                }, 280);
+                }, 300);
             });
-
             input.addEventListener('focus', () => { menu.style.display = 'block'; });
         }
 
@@ -792,7 +777,6 @@
 
         function selectPlace(type, item) {
             if (item.restricted) return;
-
             document.getElementById(`${type}-search-input`).value = item.name;
             document.getElementById(`${type}-dropdown-menu`).style.display = 'none';
 
@@ -807,33 +791,20 @@
         }
 
         function syncInputToClosest(coords, type) {
-            if (!presetLandmarks.length) return;
-            let closest = presetLandmarks[0];
-            let minD = Infinity;
-
+            let closest = presetLandmarks[0], minD = Infinity;
             presetLandmarks.forEach(lm => {
                 const d = Math.hypot(lm.lat - coords[0], lm.lon - coords[1]);
                 if (d < minD) { minD = d; closest = lm; }
             });
-
             document.getElementById(`${type}-search-input`).value = closest.name;
         }
 
         function swapLocations() {
             const startInput = document.getElementById('start-search-input');
             const destInput = document.getElementById('dest-search-input');
-
-            const tempText = startInput.value;
-            startInput.value = destInput.value;
-            destInput.value = tempText;
-
-            const tempPoint = startPoint;
-            startPoint = endPoint;
-            endPoint = tempPoint;
-
-            startMarker.setLatLng(startPoint);
-            endMarker.setLatLng(endPoint);
-
+            const tempText = startInput.value; startInput.value = destInput.value; destInput.value = tempText;
+            const tempPoint = startPoint; startPoint = endPoint; endPoint = tempPoint;
+            startMarker.setLatLng(startPoint); endMarker.setLatLng(endPoint);
             calculateRoutes();
         }
 
@@ -851,123 +822,118 @@
 
             handle.addEventListener('mousedown', (e) => {
                 if (e.target.closest('button')) return;
-                isDragging = true;
-                startX = e.clientX;
-                startY = e.clientY;
-                const rect = el.getBoundingClientRect();
-                initLeft = rect.left;
-                initTop = rect.top;
-                el.style.transition = 'none';
-                e.preventDefault();
+                isDragging = true; startX = e.clientX; startY = e.clientY;
+                const rect = el.getBoundingClientRect(); initLeft = rect.left; initTop = rect.top;
+                el.style.transition = 'none'; e.preventDefault();
             });
-
             document.addEventListener('mousemove', (e) => {
                 if (!isDragging) return;
-                const dx = e.clientX - startX;
-                const dy = e.clientY - startY;
-                el.style.left = `${Math.max(10, Math.min(window.innerWidth - el.offsetWidth - 10, initLeft + dx))}px`;
-                el.style.top = `${Math.max(10, Math.min(window.innerHeight - el.offsetHeight - 10, initTop + dy))}px`;
+                el.style.left = `${Math.max(10, Math.min(window.innerWidth - el.offsetWidth - 10, initLeft + (e.clientX - startX)))}px`;
+                el.style.top = `${Math.max(10, Math.min(window.innerHeight - el.offsetHeight - 10, initTop + (e.clientY - startY)))}px`;
             });
-
-            document.addEventListener('mouseup', () => {
-                isDragging = false;
-                el.style.transition = '';
-            });
+            document.addEventListener('mouseup', () => { isDragging = false; el.style.transition = ''; });
         })();
 
         function toggleSearchMinimize() {
-            const card = document.getElementById('search-card');
-            const btn = document.getElementById('min-toggle-btn');
-            if (card.classList.contains('minimized')) {
-                card.classList.remove('minimized');
-                btn.innerText = '—';
-            } else {
-                card.classList.add('minimized');
-                btn.innerText = '🗖';
-            }
+            const card = document.getElementById('search-card'), btn = document.getElementById('min-toggle-btn');
+            if (card.classList.contains('minimized')) { card.classList.remove('minimized'); btn.innerText = '—'; }
+            else { card.classList.add('minimized'); btn.innerText = '🗖'; }
         }
 
         function toggleRoutesPopup() {
-            const panel = document.getElementById('routes-popup-panel');
-            const fab = document.getElementById('fab-routes');
-            const chatPanel = document.getElementById('chat-popup-panel');
-            const chatFab = document.getElementById('fab-copilot');
-
-            chatPanel.style.display = 'none';
-            chatFab.classList.remove('active-fab');
-
-            if (panel.style.display === 'flex') {
-                panel.style.display = 'none';
-                fab.classList.remove('active-fab');
-            } else {
-                panel.style.display = 'flex';
-                fab.classList.add('active-fab');
-            }
+            const panel = document.getElementById('routes-popup-panel'), fab = document.getElementById('fab-routes');
+            const chatPanel = document.getElementById('chat-popup-panel'), chatFab = document.getElementById('fab-copilot');
+            chatPanel.style.display = 'none'; chatFab.classList.remove('active-fab');
+            if (panel.style.display === 'flex') { panel.style.display = 'none'; fab.classList.remove('active-fab'); }
+            else { panel.style.display = 'flex'; fab.classList.add('active-fab'); }
         }
 
         function toggleChatPopup() {
-            const panel = document.getElementById('chat-popup-panel');
-            const fab = document.getElementById('fab-copilot');
-            const routesPanel = document.getElementById('routes-popup-panel');
-            const routesFab = document.getElementById('fab-routes');
+            const panel = document.getElementById('chat-popup-panel'), fab = document.getElementById('fab-copilot');
+            const routesPanel = document.getElementById('routes-popup-panel'), routesFab = document.getElementById('fab-routes');
+            routesPanel.style.display = 'none'; routesFab.classList.remove('active-fab');
+            if (panel.style.display === 'flex') { panel.style.display = 'none'; fab.classList.remove('active-fab'); }
+            else { panel.style.display = 'flex'; fab.classList.add('active-fab'); document.getElementById('chat-input').focus(); }
+        }
 
-            routesPanel.style.display = 'none';
-            routesFab.classList.remove('active-fab');
-
-            if (panel.style.display === 'flex') {
-                panel.style.display = 'none';
-                fab.classList.remove('active-fab');
-            } else {
-                panel.style.display = 'flex';
-                fab.classList.add('active-fab');
-                updateAIStatusBadge();
-                document.getElementById('chat-input').focus();
-            }
+        async function fetchOsrmRoute(coordsString, title, tag) {
+            try {
+                const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson&steps=true`);
+                const data = await res.json();
+                if (data.routes && data.routes.length) {
+                    const r = data.routes[0];
+                    const coords = r.geometry.coordinates.map(c => [c[1], c[0]]);
+                    return {
+                        title: title, tag: tag,
+                        distance_km: Math.round(r.distance / 100) / 10,
+                        time_mins: Math.round(r.duration / 60),
+                        coords: coords
+                    };
+                }
+            } catch (e) {}
+            return null;
         }
 
         async function calculateRoutes() {
-            try {
-                const res = await fetch('/api/route', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ start_lat: startPoint[0], start_lon: startPoint[1], end_lat: endPoint[0], end_lon: endPoint[1] })
-                });
-                const data = await res.json();
-                
-                if (data.status === "restricted") {
-                    showRestrictionToast(data.message);
-                    return;
-                }
-
-                if (data.status !== "success" || !data.routes || !data.routes.length) return;
-
-                allRoutesData = data.routes;
-                activeRouteId = 0;
-
-                renderAlternativeRouteCards(data.routes);
-                renderAllRoutesOnMap();
-
-                document.getElementById('routes-popup-panel').style.display = 'flex';
-                document.getElementById('fab-routes').classList.add('active-fab');
-                document.getElementById('chat-popup-panel').style.display = 'none';
-                document.getElementById('fab-copilot').classList.remove('active-fab');
-            } catch (err) {
-                console.error("Routing error:", err);
+            if (!isPointInAllowedRegion(startPoint[0], startPoint[1]) || !isPointInAllowedRegion(endPoint[0], endPoint[1])) {
+                showRestrictionToast("⚠️ Telemetry restricted strictly to Coimbatore regional corridors.");
+                return;
             }
+
+            let rawRoutes = [];
+            // Route 1: Direct
+            let r1 = await fetchOsrmRoute(`${startPoint[1]},${startPoint[0]};${endPoint[1]},${endPoint[0]}`, "Fastest Route (Direct Road)", "Optimal Flow & Shortest");
+            if (r1) rawRoutes.push(r1);
+
+            // Route 2: Via Sultanpet
+            let r2 = await fetchOsrmRoute(`${startPoint[1]},${startPoint[0]};77.1549,10.8748;${endPoint[1]},${endPoint[0]}`, "Via Sultanpet Corridor", "State Highway 174");
+            if (r2) rawRoutes.push(r2);
+
+            // Route 3: Via Senjeri Medu
+            let r3 = await fetchOsrmRoute(`${startPoint[1]},${startPoint[0]};77.1779,10.8378;${endPoint[1]},${endPoint[0]}`, "Via Senjeri Medu Bypass", "Village Link Arterial");
+            if (r3 && Math.abs(r3.distance_km - r1.distance_km) > 0.3) rawRoutes.push(r3);
+
+            if (!rawRoutes.length) {
+                const d = Math.hypot(endPoint[0]-startPoint[0], endPoint[1]-startPoint[1]) * 111;
+                rawRoutes.push({ title: "Direct Path", tag: "Standard", distance_km: Math.round(d*10)/10, time_mins: Math.round((d/38)*60), coords: [startPoint, endPoint] });
+            }
+
+            rawRoutes.sort((a,b) => a.time_mins - b.time_mins);
+
+            allRoutesData = rawRoutes.map((r, idx) => {
+                let chunk_size = Math.max(1, Math.floor(r.coords.length / 16));
+                let segments = [], waypoint_places = [];
+                for (let i = 0; i < r.coords.length - 1; i += chunk_size) {
+                    let chunk = r.coords.slice(i, i + chunk_size + 1);
+                    let mid = chunk[Math.floor(chunk.length / 2)];
+                    let tel = getTelemetryForPoint(mid[0], mid[1]);
+                    let placeName = getClosestLandmarkName(mid[0], mid[1]);
+                    segments.push({ coords: chunk, traffic: tel.traffic, speed: tel.speed, place: placeName });
+                    if (!waypoint_places.length || waypoint_places[waypoint_places.length-1].place !== placeName) {
+                        waypoint_places.push({ place: placeName, lat: mid[0], lon: mid[1], traffic: tel.traffic, speed: tel.speed });
+                    }
+                }
+                let highCount = segments.filter(s => s.traffic === 'High').length;
+                let congRisk = Math.round((highCount / Math.max(1, segments.length)) * 100);
+                return {
+                    id: idx, title: r.title, tag: idx === 0 ? "Fastest & Recommended" : r.tag,
+                    distance_km: r.distance_km, time_mins: r.time_mins, congestion_risk: congRisk,
+                    segments: segments, waypoint_places: waypoint_places
+                };
+            });
+
+            activeRouteId = 0;
+            renderAlternativeRouteCards(allRoutesData);
+            renderAllRoutesOnMap();
         }
 
         function renderAlternativeRouteCards(routes) {
             const container = document.getElementById('alternative-routes-container');
             container.innerHTML = '';
-
             routes.forEach((r, idx) => {
                 const card = document.createElement('div');
                 card.className = `route-card ${idx === activeRouteId ? 'active-route' : ''}`;
-                
-                let badgeClass = 'badge-low';
-                if (r.congestion_risk > 35) badgeClass = 'badge-high';
-                else if (r.congestion_risk > 15) badgeClass = 'badge-med';
-
+                let badgeClass = r.congestion_risk > 35 ? 'badge-high' : (r.congestion_risk > 15 ? 'badge-med' : 'badge-low');
                 card.innerHTML = `
                     <div>
                         <div class="rc-title">${r.title}</div>
@@ -979,7 +945,6 @@
                         <div class="rc-dist">${r.distance_km} km</div>
                     </div>
                 `;
-
                 card.onclick = () => selectActiveRoute(idx);
                 container.appendChild(card);
             });
@@ -998,186 +963,82 @@
             routePolylinesGroup.clearLayers();
             waypointMarkersGroup.clearLayers();
             durationMarkersGroup.clearLayers();
+            let allPoints = [];
 
-            const allPointsForBounds = [];
-
-            // Inactive Alternative Routes (High-Contrast Cobalt Blue)
             allRoutesData.forEach((route, idx) => {
                 if (idx === activeRouteId) return;
-
-                const fullCoords = [];
+                let fullCoords = [];
                 route.segments.forEach(s => s.coords.forEach(pt => fullCoords.push(pt)));
 
                 const hitLine = L.polyline(fullCoords, { weight: 16, opacity: 0 }).addTo(routePolylinesGroup);
                 hitLine.on('click', () => selectActiveRoute(idx));
-
-                L.polyline(fullCoords, {
-                    color: '#002080',
-                    weight: 8,
-                    opacity: 0.85,
-                    lineCap: 'round',
-                    lineJoin: 'round'
-                }).addTo(routePolylinesGroup);
-
-                const altLine = L.polyline(fullCoords, {
-                    color: '#2979FF',
-                    weight: 5,
-                    opacity: 0.95,
-                    lineCap: 'round',
-                    lineJoin: 'round'
-                }).addTo(routePolylinesGroup);
+                L.polyline(fullCoords, { color: '#002080', weight: 8, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }).addTo(routePolylinesGroup);
+                const altLine = L.polyline(fullCoords, { color: '#2979FF', weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(routePolylinesGroup);
                 altLine.on('click', () => selectActiveRoute(idx));
-                altLine.bindTooltip(`<b>${route.title}</b><br>${route.time_mins} min (${route.distance_km} km)<br><i>Click road to select</i>`);
 
                 if (fullCoords.length > 4) {
-                    const midPt = fullCoords[Math.floor(fullCoords.length / 2)];
-                    const labelIcon = L.divIcon({
-                        className: 'route-duration-marker',
-                        html: `<span>${route.time_mins} min</span>`,
-                        iconSize: [64, 24],
-                        iconAnchor: [32, 12]
-                    });
-                    const durationMarker = L.marker(midPt, { icon: labelIcon }).addTo(durationMarkersGroup);
-                    durationMarker.on('click', () => selectActiveRoute(idx));
+                    let mid = fullCoords[Math.floor(fullCoords.length / 2)];
+                    let marker = L.marker(mid, { icon: L.divIcon({ className: 'route-duration-marker', html: `<span>${route.time_mins} min</span>`, iconSize: [64, 24], iconAnchor: [32, 12] }) }).addTo(durationMarkersGroup);
+                    marker.on('click', () => selectActiveRoute(idx));
                 }
             });
 
-            // Active Route in Telemetry Colors
             const activeRoute = allRoutesData[activeRouteId];
             if (activeRoute) {
                 activeRoute.segments.forEach(seg => {
-                    seg.coords.forEach(pt => allPointsForBounds.push(pt));
-
-                    L.polyline(seg.coords, {
-                        color: '#ffffff',
-                        weight: 9,
-                        opacity: 0.95,
-                        lineCap: 'round',
-                        lineJoin: 'round'
-                    }).addTo(routePolylinesGroup);
-
-                    const roadLine = L.polyline(seg.coords, {
-                        color: trafficColors[seg.traffic] || "#00E676",
-                        weight: 6,
-                        opacity: 1.0,
-                        lineCap: 'round',
-                        lineJoin: 'round'
-                    }).addTo(routePolylinesGroup);
-
-                    roadLine.bindTooltip(`<b>${seg.place}</b><br>Traffic: ${seg.traffic} • ${seg.speed} km/h`);
+                    seg.coords.forEach(pt => allPoints.push(pt));
+                    L.polyline(seg.coords, { color: '#ffffff', weight: 9, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(routePolylinesGroup);
+                    L.polyline(seg.coords, { color: trafficColors[seg.traffic] || "#00E676", weight: 6, opacity: 1.0, lineCap: 'round', lineJoin: 'round' }).addTo(routePolylinesGroup);
                 });
 
                 const placesContainer = document.getElementById('places-container');
                 placesContainer.innerHTML = '';
-
                 activeRoute.waypoint_places.forEach((wp, i) => {
-                    const placeDot = L.circleMarker([wp.lat, wp.lon], { 
-                        radius: 4, 
-                        fillColor: "#ffffff", 
-                        color: "#1a73e8", 
-                        weight: 2, 
-                        fillOpacity: 1 
-                    }).addTo(waypointMarkersGroup);
-
-                    placeDot.bindTooltip(wp.place);
-
+                    L.circleMarker([wp.lat, wp.lon], { radius: 4, fillColor: "#ffffff", color: "#1a73e8", weight: 2, fillOpacity: 1 }).addTo(waypointMarkersGroup);
                     const item = document.createElement('div');
                     item.className = 'place-item';
-                    item.innerHTML = `
-                        <div class="place-idx">${i + 1}</div>
-                        <div>
-                            <div class="place-title">${wp.place}</div>
-                            <div class="place-sub"><span style="color:${trafficColors[wp.traffic]};font-weight:700;">${wp.traffic} Traffic</span> • ${wp.speed} km/h</div>
-                        </div>
-                    `;
+                    item.innerHTML = `<div class="place-idx">${i + 1}</div><div><div class="place-title">${wp.place}</div><div class="place-sub"><span style="color:${trafficColors[wp.traffic]};font-weight:700;">${wp.traffic} Traffic</span> • ${wp.speed} km/h</div></div>`;
                     placesContainer.appendChild(item);
                 });
 
-                const activeCoords = [];
+                let activeCoords = [];
                 activeRoute.segments.forEach(s => s.coords.forEach(pt => activeCoords.push(pt)));
                 if (activeCoords.length > 4) {
-                    const midPt = activeCoords[Math.floor(activeCoords.length / 2)];
-                    const labelIcon = L.divIcon({
-                        className: 'route-duration-marker active-marker',
-                        html: `<span>${activeRoute.time_mins} min</span>`,
-                        iconSize: [64, 24],
-                        iconAnchor: [32, 12]
-                    });
-                    L.marker(midPt, { icon: labelIcon }).addTo(durationMarkersGroup);
+                    let mid = activeCoords[Math.floor(activeCoords.length / 2)];
+                    L.marker(mid, { icon: L.divIcon({ className: 'route-duration-marker active-marker', html: `<span>${activeRoute.time_mins} min</span>`, iconSize: [64, 24], iconAnchor: [32, 12] }) }).addTo(durationMarkersGroup);
                 }
             }
 
-            if (allPointsForBounds.length > 0) {
-                map.fitBounds(L.latLngBounds(allPointsForBounds), { padding: [70, 70] });
-            }
+            if (allPoints.length > 0) map.fitBounds(L.latLngBounds(allPoints), { padding: [70, 70] });
         }
 
         async function sendChatMessage() {
-            const input = document.getElementById('chat-input');
-            const message = input.value.trim();
-            if (!message) return;
-
-            const chatMessages = document.getElementById('chat-messages');
-            chatMessages.innerHTML += `<div class="msg msg-user">${message}</div>`;
-            input.value = '';
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            const input = document.getElementById('chat-input'), msg = input.value.trim();
+            if (!msg) return;
+            const chatMsgs = document.getElementById('chat-messages');
+            chatMsgs.innerHTML += `<div class="msg msg-user">${msg}</div>`;
+            input.value = ''; chatMsgs.scrollTop = chatMsgs.scrollHeight;
 
             const loadingId = "load-" + Date.now();
-            chatMessages.innerHTML += `<div class="msg msg-bot" id="${loadingId}">Analyzing corridor telemetry...</div>`;
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            chatMsgs.innerHTML += `<div class="msg msg-bot" id="${loadingId}">Analyzing telemetry...</div>`;
+            chatMsgs.scrollTop = chatMsgs.scrollHeight;
 
-            const activeRoute = allRoutesData[activeRouteId] || {};
-            const routeContext = {
-                start_place: document.getElementById('start-search-input').value,
-                dest_place: document.getElementById('dest-search-input').value,
-                active_route: {
-                    title: activeRoute.title,
-                    tag: activeRoute.tag,
-                    time_mins: activeRoute.time_mins,
-                    distance_km: activeRoute.distance_km,
-                    congestion_risk: activeRoute.congestion_risk,
-                    waypoint_names: (activeRoute.waypoint_places || []).map(p => `${p.place} (${p.traffic}, ${p.speed} km/h)`)
-                },
-                all_routes_summary: allRoutesData.map(r => ({
-                    title: r.title,
-                    tag: r.tag,
-                    time_mins: r.time_mins,
-                    distance_km: r.distance_km,
-                    congestion_risk: r.congestion_risk
-                }))
-            };
-
-            try {
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message, route_context: routeContext })
-                });
-
-                const data = await res.json();
-                const targetElement = document.getElementById(loadingId);
-                targetElement.innerHTML = formatMarkdownToHTML(data.reply);
-                
-                const modeTag = document.getElementById('ai-mode-tag');
-                if (data.mode === "online") {
-                    modeTag.innerText = "Gemini 3.6 Flash";
-                    modeTag.style.background = "rgba(0, 230, 118, 0.35)";
-                } else {
-                    modeTag.innerText = "Offline Telemetry";
-                    modeTag.style.background = "rgba(255, 179, 0, 0.35)";
+            setTimeout(() => {
+                const active = allRoutesData[activeRouteId] || {};
+                let reply = `The active route **${active.title}** takes **${active.time_mins} min** (${active.distance_km} km) with **${active.congestion_risk}%** congestion risk across Coimbatore corridors.`;
+                if (msg.toLowerCase().includes('chennai') || msg.toLowerCase().includes('bangalore') || msg.toLowerCase().includes('kerala')) {
+                    reply = "⚠️ **Region Restriction:** CommuteIQ sensor telemetry is restricted exclusively to the Coimbatore rural corridor network (Kinathukadavu, Kondampatti, Malaimanthiripalayam, Senjerimalai). Data for other cities and states is unavailable.";
                 }
-            } catch (e) {
-                document.getElementById(loadingId).innerText = "Local fallback: Server endpoint error.";
-            }
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+                document.getElementById(loadingId).innerHTML = formatMarkdownToHTML(reply);
+                chatMsgs.scrollTop = chatMsgs.scrollHeight;
+            }, 600);
         }
 
-        (async function init() {
+        window.onload = async () => {
             initMarkers();
             await setupSearchSystem();
-            updateAIStatusBadge();
-            calculateRoutes();
-        })();
+            await loadDataset();
+        };
     </script>
 </body>
 </html>
