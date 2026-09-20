@@ -1,8 +1,8 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>CommuteIQ | Smart Rural Corridor Intelligence & Satellite Navigation</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -15,20 +15,22 @@
         /* Restriction Toast Banner */
         #restriction-toast {
             position: absolute;
-            top: 24px;
+            top: 20px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 3000;
             background: #d93025;
             color: #ffffff;
-            padding: 10px 18px;
+            padding: 8px 16px;
             border-radius: 24px;
-            font-size: 0.82rem;
+            font-size: 0.78rem;
             font-weight: 700;
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
             display: none;
             align-items: center;
             gap: 8px;
+            max-width: 90%;
+            text-align: center;
             animation: fadeInToast 0.25s ease-out;
         }
 
@@ -37,7 +39,7 @@
             to { opacity: 1; transform: translate(-50%, 0); }
         }
 
-        /* Draggable, Minimizable Floating Hub */
+        /* Fully Movable Floating Search Hub */
         #search-card {
             position: absolute;
             top: 20px;
@@ -50,10 +52,10 @@
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
             border: 1px solid rgba(255, 255, 255, 0.6);
             user-select: none;
-            transition: box-shadow 0.2s ease;
             max-height: 85vh;
             display: flex;
             flex-direction: column;
+            touch-action: none;
         }
 
         .card-header {
@@ -197,7 +199,7 @@
             text-transform: uppercase;
         }
         #places-container {
-            max-height: 180px;
+            max-height: 140px;
             overflow-y: auto;
             padding-right: 4px;
         }
@@ -242,7 +244,7 @@
             top: 100%;
             left: 18px;
             right: 0;
-            max-height: 200px;
+            max-height: 180px;
             overflow-y: auto;
             background: #ffffff;
             border-radius: 8px;
@@ -277,18 +279,19 @@
             font-weight: 700;
         }
 
+        /* Floating Action Buttons (FAB) */
         .fab-launcher-container {
             position: absolute;
             bottom: 24px;
-            right: 24px;
+            right: 20px;
             z-index: 1000;
             display: flex;
             gap: 12px;
         }
 
         .map-fab-btn {
-            width: 52px;
-            height: 52px;
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             background: #ffffff;
             color: #1a73e8;
@@ -296,7 +299,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 22px;
             cursor: pointer;
             transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
             border: 2px solid #ffffff;
@@ -312,23 +315,26 @@
             box-shadow: 0 4px 20px rgba(26, 115, 232, 0.5);
         }
 
-        #routes-popup-panel {
+        /* Route Alternatives & Copilot Panels */
+        #routes-popup-panel, #chat-popup-panel {
             position: absolute;
-            bottom: 88px;
-            right: 24px;
+            bottom: 84px;
+            right: 20px;
             z-index: 1000;
             width: 360px;
-            background: rgba(255, 255, 255, 0.96);
+            max-width: calc(100vw - 40px);
+            background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(12px);
             border-radius: 16px;
             box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
             border: 1px solid rgba(255, 255, 255, 0.5);
-            padding: 14px;
-            display: flex;
+            display: none;
             flex-direction: column;
-            gap: 10px;
             animation: fadeIn 0.22s ease-out;
+            overflow: hidden;
         }
+
+        #routes-popup-panel { padding: 14px; gap: 10px; }
 
         .panel-header {
             display: flex;
@@ -352,7 +358,7 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
-            max-height: 280px;
+            max-height: 250px;
             overflow-y: auto;
         }
 
@@ -367,15 +373,8 @@
             justify-content: space-between;
             align-items: center;
         }
-        .route-card:hover {
-            border-color: #1a73e8;
-            background: #f8faff;
-        }
-        .route-card.active-route {
-            border-color: #1a73e8;
-            background: #e8f0fe;
-            box-shadow: 0 2px 8px rgba(26,115,232,0.25);
-        }
+        .route-card:hover { border-color: #1a73e8; background: #f8faff; }
+        .route-card.active-route { border-color: #1a73e8; background: #e8f0fe; box-shadow: 0 2px 8px rgba(26,115,232,0.25); }
         .rc-title { font-size: 0.82rem; font-weight: 700; color: #202124; }
         .rc-subtitle { font-size: 0.70rem; color: #5f6368; margin-top: 2px; }
         .rc-stats { text-align: right; }
@@ -399,33 +398,8 @@
             cursor: pointer;
             transition: transform 0.15s ease;
         }
-        .route-duration-marker:hover {
-            transform: scale(1.12);
-            background: #0052cc;
-            color: #ffffff;
-        }
-        .route-duration-marker.active-marker {
-            background: #188038;
-            color: #ffffff;
-            border-color: #ffffff;
-        }
-
-        #chat-popup-panel {
-            position: absolute;
-            bottom: 88px;
-            right: 24px;
-            z-index: 1000;
-            width: 370px;
-            background: rgba(255, 255, 255, 0.98);
-            backdrop-filter: blur(12px);
-            border-radius: 16px;
-            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            display: none;
-            flex-direction: column;
-            overflow: hidden;
-            animation: fadeIn 0.22s ease-out;
-        }
+        .route-duration-marker:hover { transform: scale(1.12); background: #0052cc; color: #ffffff; }
+        .route-duration-marker.active-marker { background: #188038; color: #ffffff; border-color: #ffffff; }
 
         .chat-header {
             background: #1a73e8;
@@ -438,7 +412,7 @@
             font-weight: 700;
         }
         .chat-body {
-            height: 290px;
+            height: 260px;
             overflow-y: auto;
             padding: 12px;
             display: flex;
@@ -450,16 +424,37 @@
         .msg { max-width: 90%; padding: 8px 12px; border-radius: 12px; line-height: 1.45; word-wrap: break-word; }
         .msg-bot { background: #e8f0fe; color: #1967d2; align-self: flex-start; border-bottom-left-radius: 2px; }
         .msg-bot strong { color: #0d47a1; font-weight: 700; }
-        .msg-bot ul { margin: 4px 0 4px 18px; padding: 0; }
-        .msg-bot li { margin-bottom: 3px; }
         .msg-user { background: #1a73e8; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
         .chat-footer { padding: 8px 10px; border-top: 1px solid #eee; display: flex; gap: 6px; background: white; align-items: center; }
         .chat-footer input { flex: 1; border: 1px solid #ddd; border-radius: 20px; padding: 7px 12px; font-size: 0.78rem; outline: none; }
-        .chat-footer button.send-btn { background: #1a73e8; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; }
+        .chat-footer button.send-btn { background: #1a73e8; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; flex-shrink: 0; }
 
         @keyframes fadeIn {
             0% { opacity: 0; transform: translateY(12px) scale(0.96); }
             100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* 📱 Mobile Responsive: Restricted to max 80% screen dimensions */
+        @media (max-width: 768px) {
+            #search-card {
+                width: 80vw;
+                max-width: 80vw;
+                max-height: 80vh;
+            }
+            .fab-launcher-container {
+                bottom: 16px;
+                right: 16px;
+            }
+            #routes-popup-panel, #chat-popup-panel {
+                bottom: 76px;
+                left: 10px;
+                right: 10px;
+                width: auto;
+                max-width: none;
+            }
+            .chat-body {
+                height: 220px;
+            }
         }
     </style>
 </head>
@@ -530,7 +525,7 @@
         <div class="chat-header">
             <span>🤖 Route Copilot</span>
             <div style="display:flex;align-items:center;gap:6px;">
-                <span style="font-size:0.65rem;background:rgba(0, 230, 118, 0.35);padding:2px 6px;border-radius:4px;" id="ai-mode-tag">Gemini 3.6 Flash</span>
+                <span style="font-size:0.65rem;background:rgba(0, 230, 118, 0.35);padding:2px 6px;border-radius:4px;">Gemini 3.6 Flash</span>
                 <button class="panel-close-btn" style="color:white;" onclick="toggleChatPopup()">✕</button>
             </div>
         </div>
@@ -540,7 +535,7 @@
             </div>
         </div>
         <div class="chat-footer">
-            <input type="text" id="chat-input" placeholder="Ask about route delays, speed, weather..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+            <input type="text" id="chat-input" placeholder="Ask about route delays, speed..." onkeydown="if(event.key==='Enter') sendChatMessage()">
             <button class="send-btn" onclick="sendChatMessage()">➤</button>
         </div>
     </div>
@@ -549,7 +544,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <script>
-        // 🔒 DOMAIN-RESTRICTED GEMINI API KEY CONFIGURATION
+        // 🔒 DOMAIN-RESTRICTED GEMINI API KEY CONFIGURATION (Line 282)
         const GEMINI_API_KEY = "AIzaSyDjBHt4A2Sh4xfM33MKoCuRKW36E0v_tWU";
 
         const ALLOWED_BOUNDS = { min_lat: 10.6500, max_lat: 11.2500, min_lon: 76.7500, max_lon: 77.3800 };
@@ -722,11 +717,11 @@
                 const row = document.createElement('div');
                 if (item.restricted) {
                     row.className = 'combo-option restricted-item';
-                    row.innerHTML = `<span>⚠️ ${item.name}</span><span class="tag" style="background:#fce8e6;color:#c5221f;">Restricted</span>`;
+                    row.innerHTML = `⚠️ ${item.name}`;
                     row.onclick = () => showRestrictionToast("Data restricted: CommuteIQ operates strictly inside Coimbatore corridors.");
                 } else {
                     row.className = 'combo-option';
-                    row.innerHTML = `<span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">${item.name}</span><span class="tag">${item.category || 'Place'}</span>`;
+                    row.innerHTML = `<span>${item.name}</span><span class="tag">${item.category || 'Place'}</span>`;
                     row.onclick = () => selectPlace(type, item);
                 }
                 container.appendChild(row);
@@ -816,23 +811,55 @@
             }
         });
 
+        // 🖱️ Universal Drag Support (Desktop Mouse & Mobile Touch)
         (function makeDraggable() {
             const el = document.getElementById('search-card');
             const handle = document.getElementById('drag-handle');
             let isDragging = false, startX, startY, initLeft, initTop;
 
+            function startDrag(clientX, clientY) {
+                isDragging = true;
+                startX = clientX;
+                startY = clientY;
+                const rect = el.getBoundingClientRect();
+                initLeft = rect.left;
+                initTop = rect.top;
+                el.style.transition = 'none';
+            }
+
+            function onMove(clientX, clientY) {
+                if (!isDragging) return;
+                const newLeft = initLeft + (clientX - startX);
+                const newTop = initTop + (clientY - startY);
+                el.style.left = `${Math.max(5, Math.min(window.innerWidth - el.offsetWidth - 5, newLeft))}px`;
+                el.style.top = `${Math.max(5, Math.min(window.innerHeight - el.offsetHeight - 5, newTop))}px`;
+            }
+
+            function stopDrag() {
+                isDragging = false;
+                el.style.transition = '';
+            }
+
             handle.addEventListener('mousedown', (e) => {
                 if (e.target.closest('button')) return;
-                isDragging = true; startX = e.clientX; startY = e.clientY;
-                const rect = el.getBoundingClientRect(); initLeft = rect.left; initTop = rect.top;
-                el.style.transition = 'none'; e.preventDefault();
+                startDrag(e.clientX, e.clientY);
+                e.preventDefault();
             });
-            document.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                el.style.left = `${Math.max(10, Math.min(window.innerWidth - el.offsetWidth - 10, initLeft + (e.clientX - startX)))}px`;
-                el.style.top = `${Math.max(10, Math.min(window.innerHeight - el.offsetHeight - 10, initTop + (e.clientY - startY)))}px`;
-            });
-            document.addEventListener('mouseup', () => { isDragging = false; el.style.transition = ''; });
+            document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+            document.addEventListener('mouseup', stopDrag);
+
+            handle.addEventListener('touchstart', (e) => {
+                if (e.target.closest('button')) return;
+                if (e.touches.length === 1) {
+                    startDrag(e.touches[0].clientX, e.touches[0].clientY);
+                }
+            }, { passive: true });
+            document.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 1) {
+                    onMove(e.touches[0].clientX, e.touches[0].clientY);
+                }
+            }, { passive: true });
+            document.addEventListener('touchend', stopDrag);
         })();
 
         function toggleSearchMinimize() {
@@ -1025,7 +1052,6 @@
                 const active = allRoutesData[activeRouteId] || {};
                 const contextPrompt = `You are CommuteIQ AI Copilot powered by Gemini 3.6 Flash, a smart corridor assistant for Coimbatore rural regions. The user is currently navigating from "${document.getElementById('start-search-input').value}" to "${document.getElementById('dest-search-input').value}". The active route is "${active.title}" taking ${active.time_mins} mins over ${active.distance_km} km with a congestion risk of ${active.congestion_risk}%. User query: "${msg}". Provide a helpful, concise response based on this telemetry data.`;
 
-                // Updated endpoint to use gemini-3.6-flash
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
