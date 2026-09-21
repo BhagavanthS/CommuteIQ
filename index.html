@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CommuteIQ | Smart Rural Corridor Intelligence & Satellite Navigation</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { width: 100vw; height: 100vh; overflow: hidden; background: #121212; position: relative; }
+        
+        #map { width: 100%; height: 100%; z-index: 1; }
+
+        /* Restriction Toast Banner */
+        #restriction-toast {
+            position: absolute;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 3000;
+            background: #d93025;
+            color: #ffffff;
+            padding: 10px 18px;
+            border-radius: 24px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            display: none;
+            align-items: center;
+            gap: 8px;
+            animation: fadeInToast 0.25s ease-out;
+        }
+
+        @keyframes fadeInToast {
+            from { opacity: 0; transform: translate(-50%, -12px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+
+        /* Draggable, Minimizable Floating Hub */
+        #search-card {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            width: 380px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            user-select: none;
+            transition: box-shadow 0.2s ease;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card-header {
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e8eaed;
+            cursor: move;
+            background: rgba(248, 249, 250, 0.85);
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+            flex-shrink: 0;
+        }
+        .card-header h2 {
+            font-size: 0.95rem;
+            color: #1a73e8;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 700;
+            pointer-events: none;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .sensor-pill {
+            font-size: 0.62rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 10px;
+            background: #e8f0fe;
+            color: #1a73e8;
+            text-transform: uppercase;
+        }
+        .min-btn {
+            background: none;
+            border: none;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #5f6368;
+            cursor: pointer;
+            padding: 0 4px;
+            line-height: 1;
+        }
+        .min-btn:hover { color: #1a73e8; }
+
+        .card-body {
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            user-select: auto;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+        }
+        .loc-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .green-dot { background: #00C853; }
+        .red-dot { background: #D50000; }
+
+        .input-box {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: #f1f3f4;
+            border-radius: 8px;
+            padding: 5px 8px;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+        .input-box:focus-within {
+            background: #ffffff;
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 2px rgba(26,115,232,0.18);
+        }
+
+        .input-box input {
+            width: 100%;
+            border: none;
+            outline: none;
+            background: transparent;
+            font-size: 0.80rem;
+            font-weight: 600;
+            color: #202124;
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #5f6368;
+            font-size: 0.75rem;
+            padding: 2px 4px;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .btn-calc {
+            flex: 1;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 7px;
+            border-radius: 8px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-calc:hover { background: #1557b0; }
+        .btn-swap {
+            background: #f1f3f4;
+            color: #3c4043;
+            border: none;
+            border-radius: 8px;
+            padding: 7px 10px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-swap:hover { background: #e8eaed; }
+
+        .path-section-header {
+            margin-top: 6px;
+            padding-top: 8px;
+            border-top: 1px solid #e8eaed;
+            font-size: 0.70rem;
+            font-weight: 700;
+            color: #70757a;
+            text-transform: uppercase;
+        }
+        #places-container {
+            max-height: 180px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .place-item {
+            display: flex;
+            gap: 10px;
+            padding: 6px 0;
+            border-bottom: 1px dashed #e8eaed;
+        }
+        .place-idx {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #e8f0fe;
+            color: #1a73e8;
+            font-size: 0.65rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .place-title { font-size: 0.78rem; font-weight: 600; color: #202124; }
+        .place-sub { font-size: 0.68rem; color: #5f6368; margin-top: 1px; }
+
+        #search-card.minimized {
+            width: auto;
+            border-radius: 24px;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+        }
+        #search-card.minimized .card-header {
+            border-radius: 24px;
+            border-bottom: none;
+            padding: 8px 14px;
+        }
+        #search-card.minimized .card-body {
+            display: none !important;
+        }
+
+        .combo-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 18px;
+            right: 0;
+            max-height: 200px;
+            overflow-y: auto;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+            z-index: 2000;
+            display: none;
+            margin-top: 4px;
+            border: 1px solid #dadce0;
+        }
+        .combo-option {
+            padding: 7px 10px;
+            font-size: 0.76rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f1f3f4;
+        }
+        .combo-option:hover { background: #e8f0fe; color: #1a73e8; }
+        .combo-option .tag {
+            font-size: 0.62rem;
+            padding: 2px 5px;
+            border-radius: 4px;
+            background: #f1f3f4;
+            color: #5f6368;
+            font-weight: 600;
+        }
+        .combo-option.restricted-item {
+            background: #fce8e6;
+            color: #c5221f;
+            cursor: not-allowed;
+            font-weight: 700;
+        }
+
+        .fab-launcher-container {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1000;
+            display: flex;
+            gap: 12px;
+        }
+
+        .map-fab-btn {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: #ffffff;
+            color: #1a73e8;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            border: 2px solid #ffffff;
+            user-select: none;
+        }
+        .map-fab-btn:hover {
+            transform: scale(1.1);
+            background: #f8f9fa;
+        }
+        .map-fab-btn.active-fab {
+            background: #1a73e8;
+            color: #ffffff;
+            box-shadow: 0 4px 20px rgba(26, 115, 232, 0.5);
+        }
+
+        #routes-popup-panel {
+            position: absolute;
+            bottom: 88px;
+            right: 24px;
+            z-index: 1000;
+            width: 360px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            animation: fadeIn 0.22s ease-out;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #202124;
+            border-bottom: 1px solid #e8eaed;
+            padding-bottom: 6px;
+        }
+        .panel-close-btn {
+            background: none;
+            border: none;
+            font-size: 1.1rem;
+            color: #5f6368;
+            cursor: pointer;
+        }
+
+        .routes-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .route-card {
+            border: 1.5px solid #dadce0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #ffffff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .route-card:hover {
+            border-color: #1a73e8;
+            background: #f8faff;
+        }
+        .route-card.active-route {
+            border-color: #1a73e8;
+            background: #e8f0fe;
+            box-shadow: 0 2px 8px rgba(26,115,232,0.25);
+        }
+        .rc-title { font-size: 0.82rem; font-weight: 700; color: #202124; }
+        .rc-subtitle { font-size: 0.70rem; color: #5f6368; margin-top: 2px; }
+        .rc-stats { text-align: right; }
+        .rc-time { font-size: 1.1rem; font-weight: 800; color: #188038; }
+        .rc-dist { font-size: 0.72rem; color: #5f6368; }
+        .rc-badge { font-size: 0.60rem; padding: 2px 6px; border-radius: 4px; font-weight: 700; margin-top: 3px; display: inline-block; }
+        .badge-low { background: #e6f4ea; color: #137333; }
+        .badge-med { background: #fef7e0; color: #b06000; }
+        .badge-high { background: #fce8e6; color: #c5221f; }
+
+        .route-duration-marker {
+            background: #ffffff;
+            border: 2px solid #0052cc;
+            border-radius: 14px;
+            padding: 3px 9px;
+            font-size: 11px;
+            font-weight: 800;
+            color: #0052cc;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.45);
+            white-space: nowrap;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+        .route-duration-marker:hover {
+            transform: scale(1.12);
+            background: #0052cc;
+            color: #ffffff;
+        }
+        .route-duration-marker.active-marker {
+            background: #188038;
+            color: #ffffff;
+            border-color: #ffffff;
+        }
+
+        #chat-popup-panel {
+            position: absolute;
+            bottom: 88px;
+            right: 24px;
+            z-index: 1000;
+            width: 370px;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            animation: fadeIn 0.22s ease-out;
+        }
+
+        .chat-header {
+            background: #1a73e8;
+            color: white;
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.88rem;
+            font-weight: 700;
+        }
+        .chat-body {
+            height: 290px;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 0.82rem;
+            background: #fdfdfd;
+        }
+        .msg { max-width: 90%; padding: 8px 12px; border-radius: 12px; line-height: 1.45; word-wrap: break-word; }
+        .msg-bot { background: #e8f0fe; color: #1967d2; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .msg-bot strong { color: #0d47a1; font-weight: 700; }
+        .msg-bot ul { margin: 4px 0 4px 18px; padding: 0; }
+        .msg-bot li { margin-bottom: 3px; }
+        .msg-user { background: #1a73e8; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .chat-footer { padding: 8px 10px; border-top: 1px solid #eee; display: flex; gap: 6px; background: white; align-items: center; }
+        .chat-footer input { flex: 1; border: 1px solid #ddd; border-radius: 20px; padding: 7px 12px; font-size: 0.78rem; outline: none; }
+        .chat-footer button.send-btn { background: #1a73e8; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; }
+
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(12px) scale(0.96); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <!-- Data Boundary Restriction Warning Toast -->
+    <div id="restriction-toast">
+        <span>⚠️ Region Restricted: CommuteIQ sensor telemetry is available only within Coimbatore rural sectors.</span>
+    </div>
+
+    <div id="search-card">
+        <div class="card-header" id="drag-handle">
+            <h2>🚦 CommuteIQ</h2>
+            <div class="header-controls">
+                <span class="sensor-pill">60K Telemetry</span>
+                <button class="min-btn" onclick="toggleSearchMinimize()" id="min-toggle-btn" title="Minimize / Expand">—</button>
+            </div>
+        </div>
+
+        <div class="card-body">
+            <div class="input-group">
+                <div class="loc-dot green-dot"></div>
+                <div class="input-box">
+                    <input type="text" id="start-search-input" placeholder="Origin..." autocomplete="off">
+                    <button class="icon-btn" onclick="toggleDropdown('start')">▼</button>
+                </div>
+                <div id="start-dropdown-menu" class="combo-dropdown-menu"></div>
+            </div>
+
+            <div class="input-group">
+                <div class="loc-dot red-dot"></div>
+                <div class="input-box">
+                    <input type="text" id="dest-search-input" placeholder="Destination..." autocomplete="off">
+                    <button class="icon-btn" onclick="toggleDropdown('dest')">▼</button>
+                </div>
+                <div id="dest-dropdown-menu" class="combo-dropdown-menu"></div>
+            </div>
+
+            <div class="action-row">
+                <button class="btn-calc" onclick="calculateRoutes()">Recalculate Route</button>
+                <button class="btn-swap" onclick="swapLocations()" title="Swap ⇅">⇅</button>
+            </div>
+
+            <div class="path-section-header">Corridors Passed in Path</div>
+            <div id="places-container"></div>
+        </div>
+    </div>
+
+    <div class="fab-launcher-container">
+        <div class="map-fab-btn active-fab" id="fab-routes" onclick="toggleRoutesPopup()" title="Route Suggestions & Alternatives">
+            🛣️
+        </div>
+        <div class="map-fab-btn" id="fab-copilot" onclick="toggleChatPopup()" title="AI Route Copilot">
+            🤖
+        </div>
+    </div>
+
+    <div id="routes-popup-panel">
+        <div class="panel-header">
+            <span>Route Suggestions & Alternatives</span>
+            <button class="panel-close-btn" onclick="toggleRoutesPopup()">✕</button>
+        </div>
+        <div class="routes-list" id="alternative-routes-container"></div>
+    </div>
+
+    <div id="chat-popup-panel">
+        <div class="chat-header">
+            <span>🤖 Route Copilot</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:0.65rem;background:rgba(255,255,255,0.25);padding:2px 6px;border-radius:4px;" id="ai-mode-tag">Checking...</span>
+                <button class="panel-close-btn" style="color:white;" onclick="toggleChatPopup()">✕</button>
+            </div>
+        </div>
+        <div class="chat-body" id="chat-messages">
+            <div class="msg msg-bot">
+                Vanakkam! Ask me anything about road conditions along Coimbatore, Kinathukadavu, Kondampatti, Malaimanthiripalayam, or Senjerimalai corridors.
+            </div>
+        </div>
+        <div class="chat-footer">
+            <input type="text" id="chat-input" placeholder="Ask about route delays, speed, weather..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+            <button class="send-btn" onclick="sendChatMessage()">➤</button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Authorized Coimbatore Regional Geographic Boundary
+        const ALLOWED_BOUNDS = { min_lat: 10.6500, max_lat: 11.2500, min_lon: 76.7500, max_lon: 77.3800 };
+
+        function isPointInAllowedRegion(lat, lon) {
+            return (lat >= ALLOWED_BOUNDS.min_lat && lat <= ALLOWED_BOUNDS.max_lat &&
+                    lon >= ALLOWED_BOUNDS.min_lon && lon <= ALLOWED_BOUNDS.max_lon);
+        }
+
+        function showRestrictionToast(customMsg) {
+            const toast = document.getElementById('restriction-toast');
+            toast.innerText = customMsg || "⚠️ Data Restricted: CommuteIQ telemetry is available only within authorized Coimbatore rural sectors.";
+            toast.style.display = 'flex';
+            setTimeout(() => { toast.style.display = 'none'; }, 4500);
+        }
+
+        const bounds = L.latLngBounds(L.latLng(ALLOWED_BOUNDS.min_lat, ALLOWED_BOUNDS.min_lon), L.latLng(ALLOWED_BOUNDS.max_lat, ALLOWED_BOUNDS.max_lon));
+        
+        const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 20, 
+            attribution: '&copy; Google Maps'
+        });
+
+        const esriSatellite = L.tileLayer(
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            { attribution: 'Tiles &copy; Esri', maxNativeZoom: 17, maxZoom: 19 }
+        );
+        const esriLabels = L.tileLayer(
+            'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+            { attribution: 'Labels &copy; Esri', maxNativeZoom: 17, maxZoom: 19 }
+        );
+        const satelliteHybrid = L.layerGroup([esriSatellite, esriLabels]);
+
+        const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; CARTO', maxZoom: 19
+        });
+
+        const map = L.map('map', { 
+            maxBounds: bounds, 
+            maxBoundsViscosity: 0.85, 
+            minZoom: 9, 
+            maxZoom: 20,
+            layers: [googleHybrid]
+        }).setView([10.8260, 77.1400], 12);
+
+        L.control.layers({
+            "🗺️ Google Satellite (Default)": googleHybrid,
+            "🛰️ Esri Satellite (Hybrid)": satelliteHybrid,
+            "🗺️ Clean Vector Streets": streetLayer
+        }, null, { position: 'topright' }).addTo(map);
+
+        let startPoint = [10.82736, 77.06052]; 
+        let endPoint = [10.825917, 77.221222]; 
+        let startMarker = null;
+        let endMarker = null;
+        let allRoutesData = [];
+        let activeRouteId = 0;
+        let routePolylinesGroup = L.layerGroup().addTo(map);
+        let waypointMarkersGroup = L.layerGroup().addTo(map);
+        let durationMarkersGroup = L.layerGroup().addTo(map);
+        let presetLandmarks = [];
+        let searchDebounceTimers = {};
+
+        const trafficColors = { "Low": "#00E676", "Medium": "#FFB300", "High": "#FF1744" };
+
+        function formatMarkdownToHTML(text) {
+            if (!text) return '';
+            let clean = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            clean = clean.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
+            clean = clean.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            clean = clean.replace(/(^|[^\*])\*([^\*]+)\*/g, '$1<em>$2</em>');
+
+            const lines = clean.split('\n');
+            let inList = false;
+            let result = [];
+
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+                    if (!inList) {
+                        result.push('<ul>');
+                        inList = true;
+                    }
+                    result.push(`<li>${trimmed.substring(2)}</li>`);
+                } else {
+                    if (inList) {
+                        result.push('</ul>');
+                        inList = false;
+                    }
+                    if (trimmed.length > 0) {
+                        result.push(`<div>${trimmed}</div>`);
+                    }
+                }
+            });
+
+            if (inList) result.push('</ul>');
+            return result.join('');
+        }
+
+        function createPinIcon(fillColor, label) {
+            return L.divIcon({
+                className: 'custom-map-pin',
+                html: `
+                    <div style="position: relative; width: 26px; height: 38px; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.6));">
+                        <svg viewBox="0 0 24 36" width="26" height="38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 36 12 36C12 36 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${fillColor}" stroke="#ffffff" stroke-width="1.6"/>
+                            <circle cx="12" cy="12" r="5" fill="#ffffff"/>
+                        </svg>
+                        <span style="position: absolute; top: 5px; left: 0; width: 24px; text-align: center; font-size: 10px; font-weight: 800; color: ${fillColor};">${label}</span>
+                    </div>
+                `,
+                iconSize: [26, 38],
+                iconAnchor: [13, 37]
+            });
+        }
+
+        function initMarkers() {
+            startMarker = L.marker(startPoint, { draggable: true, icon: createPinIcon('#00C853', 'A') }).addTo(map);
+            endMarker = L.marker(endPoint, { draggable: true, icon: createPinIcon('#D50000', 'B') }).addTo(map);
+
+            startMarker.on('dragend', (e) => { 
+                const pt = [e.target.getLatLng().lat, e.target.getLatLng().lng];
+                if (!isPointInAllowedRegion(pt[0], pt[1])) {
+                    showRestrictionToast("⚠️ Location outside authorized zone. Snapped to nearest Coimbatore corridor.");
+                    startMarker.setLatLng(startPoint);
+                    return;
+                }
+                startPoint = pt; 
+                syncInputToClosest(startPoint, 'start');
+                calculateRoutes(); 
+            });
+
+            endMarker.on('dragend', (e) => { 
+                const pt = [e.target.getLatLng().lat, e.target.getLatLng().lng];
+                if (!isPointInAllowedRegion(pt[0], pt[1])) {
+                    showRestrictionToast("⚠️ Location outside authorized zone. Snapped to nearest Coimbatore corridor.");
+                    endMarker.setLatLng(endPoint);
+                    return;
+                }
+                endPoint = pt; 
+                syncInputToClosest(endPoint, 'dest');
+                calculateRoutes(); 
+            });
+        }
+
+        async function updateAIStatusBadge() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                const badge = document.getElementById('ai-mode-tag');
+                if (data.online) {
+                    badge.innerText = "Gemini 3.6 Flash";
+                    badge.style.background = "rgba(0, 230, 118, 0.35)";
+                } else {
+                    badge.innerText = "Offline Telemetry";
+                    badge.style.background = "rgba(255, 179, 0, 0.35)";
+                }
+            } catch (e) {
+                const badge = document.getElementById('ai-mode-tag');
+                badge.innerText = "Offline Telemetry";
+                badge.style.background = "rgba(255, 179, 0, 0.35)";
+            }
+        }
+
+        async function setupSearchSystem() {
+            try {
+                const res = await fetch('/api/places');
+                presetLandmarks = await res.json();
+
+                renderDropdownList('start', presetLandmarks);
+                renderDropdownList('dest', presetLandmarks);
+
+                document.getElementById('start-search-input').value = "Sri Eshwar College of Engineering (SECE Main Gate)";
+                document.getElementById('dest-search-input').value = "Bhagavanth Sakthivel Home, Malaimanthiripalayam";
+
+                setupLiveInputListener('start');
+                setupLiveInputListener('dest');
+            } catch (err) {
+                console.error("Error loading places:", err);
+            }
+        }
+
+        function renderDropdownList(type, list) {
+            const container = document.getElementById(`${type}-dropdown-menu`);
+            container.innerHTML = '';
+            if (!list.length) {
+                container.innerHTML = '<div style="padding:8px 10px;color:#70757a;font-size:0.75rem;">No authorized place found</div>';
+                return;
+            }
+
+            list.forEach(item => {
+                const row = document.createElement('div');
+                if (item.restricted) {
+                    row.className = 'combo-option restricted-item';
+                    row.innerHTML = `<span>⚠️ ${item.name}</span><span class="tag" style="background:#fce8e6;color:#c5221f;">Restricted</span>`;
+                    row.onclick = () => showRestrictionToast("Data restricted: CommuteIQ operates strictly inside Coimbatore corridors.");
+                } else {
+                    row.className = 'combo-option';
+                    row.innerHTML = `
+                        <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">${item.name}</span>
+                        <span class="tag">${item.category || 'Place'}</span>
+                    `;
+                    row.onclick = () => selectPlace(type, item);
+                }
+                container.appendChild(row);
+            });
+        }
+
+        function setupLiveInputListener(type) {
+            const input = document.getElementById(`${type}-search-input`);
+            const menu = document.getElementById(`${type}-dropdown-menu`);
+
+            input.addEventListener('input', () => {
+                const term = input.value.trim();
+                clearTimeout(searchDebounceTimers[type]);
+
+                if (term.length < 2) {
+                    renderDropdownList(type, presetLandmarks);
+                    menu.style.display = 'block';
+                    return;
+                }
+
+                searchDebounceTimers[type] = setTimeout(async () => {
+                    try {
+                        const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
+                        const results = await res.json();
+                        renderDropdownList(type, results);
+                        menu.style.display = 'block';
+                    } catch (e) {
+                        console.error(e);
+                    }
+                }, 280);
+            });
+
+            input.addEventListener('focus', () => { menu.style.display = 'block'; });
+        }
+
+        function toggleDropdown(type) {
+            const menu = document.getElementById(`${type}-dropdown-menu`);
+            menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
+        }
+
+        function selectPlace(type, item) {
+            if (item.restricted) return;
+
+            document.getElementById(`${type}-search-input`).value = item.name;
+            document.getElementById(`${type}-dropdown-menu`).style.display = 'none';
+
+            if (type === 'start') {
+                startPoint = [item.lat, item.lon];
+                startMarker.setLatLng(startPoint);
+            } else {
+                endPoint = [item.lat, item.lon];
+                endMarker.setLatLng(endPoint);
+            }
+            calculateRoutes();
+        }
+
+        function syncInputToClosest(coords, type) {
+            if (!presetLandmarks.length) return;
+            let closest = presetLandmarks[0];
+            let minD = Infinity;
+
+            presetLandmarks.forEach(lm => {
+                const d = Math.hypot(lm.lat - coords[0], lm.lon - coords[1]);
+                if (d < minD) { minD = d; closest = lm; }
+            });
+
+            document.getElementById(`${type}-search-input`).value = closest.name;
+        }
+
+        function swapLocations() {
+            const startInput = document.getElementById('start-search-input');
+            const destInput = document.getElementById('dest-search-input');
+
+            const tempText = startInput.value;
+            startInput.value = destInput.value;
+            destInput.value = tempText;
+
+            const tempPoint = startPoint;
+            startPoint = endPoint;
+            endPoint = tempPoint;
+
+            startMarker.setLatLng(startPoint);
+            endMarker.setLatLng(endPoint);
+
+            calculateRoutes();
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.input-group')) {
+                document.getElementById('start-dropdown-menu').style.display = 'none';
+                document.getElementById('dest-dropdown-menu').style.display = 'none';
+            }
+        });
+
+        (function makeDraggable() {
+            const el = document.getElementById('search-card');
+            const handle = document.getElementById('drag-handle');
+            let isDragging = false, startX, startY, initLeft, initTop;
+
+            handle.addEventListener('mousedown', (e) => {
+                if (e.target.closest('button')) return;
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                const rect = el.getBoundingClientRect();
+                initLeft = rect.left;
+                initTop = rect.top;
+                el.style.transition = 'none';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                el.style.left = `${Math.max(10, Math.min(window.innerWidth - el.offsetWidth - 10, initLeft + dx))}px`;
+                el.style.top = `${Math.max(10, Math.min(window.innerHeight - el.offsetHeight - 10, initTop + dy))}px`;
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                el.style.transition = '';
+            });
+        })();
+
+        function toggleSearchMinimize() {
+            const card = document.getElementById('search-card');
+            const btn = document.getElementById('min-toggle-btn');
+            if (card.classList.contains('minimized')) {
+                card.classList.remove('minimized');
+                btn.innerText = '—';
+            } else {
+                card.classList.add('minimized');
+                btn.innerText = '🗖';
+            }
+        }
+
+        function toggleRoutesPopup() {
+            const panel = document.getElementById('routes-popup-panel');
+            const fab = document.getElementById('fab-routes');
+            const chatPanel = document.getElementById('chat-popup-panel');
+            const chatFab = document.getElementById('fab-copilot');
+
+            chatPanel.style.display = 'none';
+            chatFab.classList.remove('active-fab');
+
+            if (panel.style.display === 'flex') {
+                panel.style.display = 'none';
+                fab.classList.remove('active-fab');
+            } else {
+                panel.style.display = 'flex';
+                fab.classList.add('active-fab');
+            }
+        }
+
+        function toggleChatPopup() {
+            const panel = document.getElementById('chat-popup-panel');
+            const fab = document.getElementById('fab-copilot');
+            const routesPanel = document.getElementById('routes-popup-panel');
+            const routesFab = document.getElementById('fab-routes');
+
+            routesPanel.style.display = 'none';
+            routesFab.classList.remove('active-fab');
+
+            if (panel.style.display === 'flex') {
+                panel.style.display = 'none';
+                fab.classList.remove('active-fab');
+            } else {
+                panel.style.display = 'flex';
+                fab.classList.add('active-fab');
+                updateAIStatusBadge();
+                document.getElementById('chat-input').focus();
+            }
+        }
+
+        async function calculateRoutes() {
+            try {
+                const res = await fetch('/api/route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start_lat: startPoint[0], start_lon: startPoint[1], end_lat: endPoint[0], end_lon: endPoint[1] })
+                });
+                const data = await res.json();
+                
+                if (data.status === "restricted") {
+                    showRestrictionToast(data.message);
+                    return;
+                }
+
+                if (data.status !== "success" || !data.routes || !data.routes.length) return;
+
+                allRoutesData = data.routes;
+                activeRouteId = 0;
+
+                renderAlternativeRouteCards(data.routes);
+                renderAllRoutesOnMap();
+
+                document.getElementById('routes-popup-panel').style.display = 'flex';
+                document.getElementById('fab-routes').classList.add('active-fab');
+                document.getElementById('chat-popup-panel').style.display = 'none';
+                document.getElementById('fab-copilot').classList.remove('active-fab');
+            } catch (err) {
+                console.error("Routing error:", err);
+            }
+        }
+
+        function renderAlternativeRouteCards(routes) {
+            const container = document.getElementById('alternative-routes-container');
+            container.innerHTML = '';
+
+            routes.forEach((r, idx) => {
+                const card = document.createElement('div');
+                card.className = `route-card ${idx === activeRouteId ? 'active-route' : ''}`;
+                
+                let badgeClass = 'badge-low';
+                if (r.congestion_risk > 35) badgeClass = 'badge-high';
+                else if (r.congestion_risk > 15) badgeClass = 'badge-med';
+
+                card.innerHTML = `
+                    <div>
+                        <div class="rc-title">${r.title}</div>
+                        <div class="rc-subtitle">${r.tag}</div>
+                        <span class="rc-badge ${badgeClass}">${r.congestion_risk}% Congestion</span>
+                    </div>
+                    <div class="rc-stats">
+                        <div class="rc-time">${r.time_mins} min</div>
+                        <div class="rc-dist">${r.distance_km} km</div>
+                    </div>
+                `;
+
+                card.onclick = () => selectActiveRoute(idx);
+                container.appendChild(card);
+            });
+        }
+
+        function selectActiveRoute(routeIdx) {
+            activeRouteId = routeIdx;
+            document.querySelectorAll('.route-card').forEach((c, i) => {
+                if (i === routeIdx) c.classList.add('active-route');
+                else c.classList.remove('active-route');
+            });
+            renderAllRoutesOnMap();
+        }
+
+        function renderAllRoutesOnMap() {
+            routePolylinesGroup.clearLayers();
+            waypointMarkersGroup.clearLayers();
+            durationMarkersGroup.clearLayers();
+
+            const allPointsForBounds = [];
+
+            // Inactive Alternative Routes (High-Contrast Cobalt Blue)
+            allRoutesData.forEach((route, idx) => {
+                if (idx === activeRouteId) return;
+
+                const fullCoords = [];
+                route.segments.forEach(s => s.coords.forEach(pt => fullCoords.push(pt)));
+
+                const hitLine = L.polyline(fullCoords, { weight: 16, opacity: 0 }).addTo(routePolylinesGroup);
+                hitLine.on('click', () => selectActiveRoute(idx));
+
+                L.polyline(fullCoords, {
+                    color: '#002080',
+                    weight: 8,
+                    opacity: 0.85,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                }).addTo(routePolylinesGroup);
+
+                const altLine = L.polyline(fullCoords, {
+                    color: '#2979FF',
+                    weight: 5,
+                    opacity: 0.95,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                }).addTo(routePolylinesGroup);
+                altLine.on('click', () => selectActiveRoute(idx));
+                altLine.bindTooltip(`<b>${route.title}</b><br>${route.time_mins} min (${route.distance_km} km)<br><i>Click road to select</i>`);
+
+                if (fullCoords.length > 4) {
+                    const midPt = fullCoords[Math.floor(fullCoords.length / 2)];
+                    const labelIcon = L.divIcon({
+                        className: 'route-duration-marker',
+                        html: `<span>${route.time_mins} min</span>`,
+                        iconSize: [64, 24],
+                        iconAnchor: [32, 12]
+                    });
+                    const durationMarker = L.marker(midPt, { icon: labelIcon }).addTo(durationMarkersGroup);
+                    durationMarker.on('click', () => selectActiveRoute(idx));
+                }
+            });
+
+            // Active Route in Telemetry Colors
+            const activeRoute = allRoutesData[activeRouteId];
+            if (activeRoute) {
+                activeRoute.segments.forEach(seg => {
+                    seg.coords.forEach(pt => allPointsForBounds.push(pt));
+
+                    L.polyline(seg.coords, {
+                        color: '#ffffff',
+                        weight: 9,
+                        opacity: 0.95,
+                        lineCap: 'round',
+                        lineJoin: 'round'
+                    }).addTo(routePolylinesGroup);
+
+                    const roadLine = L.polyline(seg.coords, {
+                        color: trafficColors[seg.traffic] || "#00E676",
+                        weight: 6,
+                        opacity: 1.0,
+                        lineCap: 'round',
+                        lineJoin: 'round'
+                    }).addTo(routePolylinesGroup);
+
+                    roadLine.bindTooltip(`<b>${seg.place}</b><br>Traffic: ${seg.traffic} • ${seg.speed} km/h`);
+                });
+
+                const placesContainer = document.getElementById('places-container');
+                placesContainer.innerHTML = '';
+
+                activeRoute.waypoint_places.forEach((wp, i) => {
+                    const placeDot = L.circleMarker([wp.lat, wp.lon], { 
+                        radius: 4, 
+                        fillColor: "#ffffff", 
+                        color: "#1a73e8", 
+                        weight: 2, 
+                        fillOpacity: 1 
+                    }).addTo(waypointMarkersGroup);
+
+                    placeDot.bindTooltip(wp.place);
+
+                    const item = document.createElement('div');
+                    item.className = 'place-item';
+                    item.innerHTML = `
+                        <div class="place-idx">${i + 1}</div>
+                        <div>
+                            <div class="place-title">${wp.place}</div>
+                            <div class="place-sub"><span style="color:${trafficColors[wp.traffic]};font-weight:700;">${wp.traffic} Traffic</span> • ${wp.speed} km/h</div>
+                        </div>
+                    `;
+                    placesContainer.appendChild(item);
+                });
+
+                const activeCoords = [];
+                activeRoute.segments.forEach(s => s.coords.forEach(pt => activeCoords.push(pt)));
+                if (activeCoords.length > 4) {
+                    const midPt = activeCoords[Math.floor(activeCoords.length / 2)];
+                    const labelIcon = L.divIcon({
+                        className: 'route-duration-marker active-marker',
+                        html: `<span>${activeRoute.time_mins} min</span>`,
+                        iconSize: [64, 24],
+                        iconAnchor: [32, 12]
+                    });
+                    L.marker(midPt, { icon: labelIcon }).addTo(durationMarkersGroup);
+                }
+            }
+
+            if (allPointsForBounds.length > 0) {
+                map.fitBounds(L.latLngBounds(allPointsForBounds), { padding: [70, 70] });
+            }
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const chatMessages = document.getElementById('chat-messages');
+            chatMessages.innerHTML += `<div class="msg msg-user">${message}</div>`;
+            input.value = '';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            const loadingId = "load-" + Date.now();
+            chatMessages.innerHTML += `<div class="msg msg-bot" id="${loadingId}">Analyzing corridor telemetry...</div>`;
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            const activeRoute = allRoutesData[activeRouteId] || {};
+            const routeContext = {
+                start_place: document.getElementById('start-search-input').value,
+                dest_place: document.getElementById('dest-search-input').value,
+                active_route: {
+                    title: activeRoute.title,
+                    tag: activeRoute.tag,
+                    time_mins: activeRoute.time_mins,
+                    distance_km: activeRoute.distance_km,
+                    congestion_risk: activeRoute.congestion_risk,
+                    waypoint_names: (activeRoute.waypoint_places || []).map(p => `${p.place} (${p.traffic}, ${p.speed} km/h)`)
+                },
+                all_routes_summary: allRoutesData.map(r => ({
+                    title: r.title,
+                    tag: r.tag,
+                    time_mins: r.time_mins,
+                    distance_km: r.distance_km,
+                    congestion_risk: r.congestion_risk
+                }))
+            };
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message, route_context: routeContext })
+                });
+
+                const data = await res.json();
+                const targetElement = document.getElementById(loadingId);
+                targetElement.innerHTML = formatMarkdownToHTML(data.reply);
+                
+                const modeTag = document.getElementById('ai-mode-tag');
+                if (data.mode === "online") {
+                    modeTag.innerText = "Gemini 3.6 Flash";
+                    modeTag.style.background = "rgba(0, 230, 118, 0.35)";
+                } else {
+                    modeTag.innerText = "Offline Telemetry";
+                    modeTag.style.background = "rgba(255, 179, 0, 0.35)";
+                }
+            } catch (e) {
+                document.getElementById(loadingId).innerText = "Local fallback: Server endpoint error.";
+            }
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        (async function init() {
+            initMarkers();
+            await setupSearchSystem();
+            updateAIStatusBadge();
+            calculateRoutes();
+        })();
+    </script>
+</body>
+</html>
